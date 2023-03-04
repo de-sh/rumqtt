@@ -1,3 +1,4 @@
+use crate::quic::{self, QuicConnection};
 #[cfg(any(feature = "use-rustls", feature = "use-native-tls"))]
 use crate::tls;
 use crate::{framed::Network, Transport};
@@ -52,6 +53,8 @@ pub enum ConnectionError {
     NotConnAck(Packet),
     #[error("Requests done")]
     RequestsDone,
+    #[error("Quic = {0}")]
+    Quic(#[from] quic::Error),
 }
 
 /// Eventloop with all the state of a connection
@@ -311,6 +314,20 @@ async fn network_connect(
             let addr = format!("{}:{}", options.broker_addr, options.port);
             let tcp_stream = socket_connect(addr, network_options).await?;
             Network::new(tcp_stream, options.max_incoming_packet_size)
+        }
+        Transport::Quic(tls_config, client_port, server_name) => {
+            let local_addr = format!("0.0.0.0:{}", client_port).parse().unwrap();
+            let server_addr = format!("{}:{}", options.broker_addr, options.port)
+                .parse()
+                .unwrap();
+
+            let crypto = tls::rustls_config(&tls_config)?;
+
+            let quic_network = QuicConnection::new(local_addr)?
+                .connect(crypto, server_addr, &server_name)
+                .await?;
+
+            Network::new(quic_network, options.max_incoming_packet_size)
         }
         #[cfg(any(feature = "use-rustls", feature = "use-native-tls"))]
         Transport::Tls(tls_config) => {

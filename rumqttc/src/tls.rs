@@ -69,9 +69,8 @@ pub enum Error {
 //     }
 // }
 
-#[cfg(feature = "use-rustls")]
-pub async fn rustls_connector(tls_config: &TlsConfiguration) -> Result<RustlsConnector, Error> {
-    let config = match tls_config {
+pub fn rustls_config(tls_config: &TlsConfiguration) -> Result<ClientConfig, Error> {
+    match tls_config {
         TlsConfiguration::Simple {
             ca,
             alpn,
@@ -140,12 +139,17 @@ pub async fn rustls_connector(tls_config: &TlsConfiguration) -> Result<RustlsCon
                 config.alpn_protocols.extend_from_slice(alpn);
             }
 
-            Arc::new(config)
+            Ok(config)
         }
-        TlsConfiguration::Rustls(tls_client_config) => tls_client_config.clone(),
+        TlsConfiguration::Rustls(tls_client_config) => Ok(tls_client_config.as_ref().clone()),
         #[allow(unreachable_patterns)]
         _ => unreachable!("This cannot be called for other TLS backends than Rustls"),
-    };
+    }
+}
+
+#[cfg(feature = "use-rustls")]
+pub async fn rustls_connector(tls_config: &TlsConfiguration) -> Result<RustlsConnector, Error> {
+    let config = Arc::new(rustls_config(tls_config)?);
 
     Ok(RustlsConnector::from(config))
 }

@@ -1964,6 +1964,7 @@ dependencies = [
  "pollster",
  "pretty_assertions",
  "pretty_env_logger",
+ "quinn",
  "rustls",
  "rustls-native-certs",
  "rustls-pemfile",

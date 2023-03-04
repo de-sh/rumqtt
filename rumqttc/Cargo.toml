@@ -27,6 +27,7 @@ log = "0.4"
 pollster = "0.2"
 flume = "0.10"
 thiserror = "1"
+quinn = "0.9.3"
 
 # Optional
 # rustls

@@ -107,6 +107,7 @@ mod client;
 mod eventloop;
 mod framed;
 pub mod mqttbytes;
+mod quic;
 mod state;
 #[cfg(any(feature = "use-rustls", feature = "use-native-tls"))]
 mod tls;
@@ -208,6 +209,7 @@ pub enum Transport {
     Tls(TlsConfiguration),
     #[cfg(unix)]
     Unix,
+    Quic(TlsConfiguration, u16, String),
     #[cfg(feature = "websocket")]
     #[cfg_attr(docsrs, doc(cfg(feature = "websocket")))]
     Ws,

@@ -281,6 +281,7 @@ async fn network_connect(options: &MqttOptions) -> Result<Network, ConnectionErr
 
             Network::new(WsStream::new(socket), options.max_incoming_packet_size)
         }
+        _ => unimplemented!(),
     };
 
     Ok(network)
