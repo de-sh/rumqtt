@@ -10,6 +10,7 @@ use crate::protocol::v5::V5;
 #[cfg(feature = "websockets")]
 use crate::protocol::ws::Ws;
 use crate::protocol::Protocol;
+use crate::server::quic::QuicListener;
 #[cfg(any(feature = "use-rustls", feature = "use-native-tls"))]
 use crate::server::tls::{self, TLSAcceptor};
 use crate::{meters, ConnectionSettings, Meter};
@@ -51,6 +52,10 @@ pub enum Error {
     Accept(String),
     #[error("Remote error = {0}")]
     Remote(#[from] remote::Error),
+    #[error("QUIC requires TLS")]
+    NoTLS,
+    #[error("QUIC = {0}")]
+    Quic(#[from] super::quic::Error),
 }
 
 pub struct Broker {
@@ -232,6 +237,40 @@ impl Broker {
             }
         }
 
+        if let Some(quic_config) = &self.config.quic_v4 {
+            for (_, config) in quic_config.clone() {
+                let server_thread = thread::Builder::new().name(config.name.clone());
+                let server = Server::new(config, self.router_tx.clone(), V4);
+                server_thread.spawn(move || {
+                    let mut runtime = tokio::runtime::Builder::new_current_thread();
+                    let runtime = runtime.enable_all().build().unwrap();
+
+                    runtime.block_on(async {
+                        if let Err(e) = server.start_quic().await {
+                            error!(error=?e, "Server error - QUIC V4");
+                        }
+                    });
+                })?;
+            }
+        }
+
+        if let Some(quic_config) = &self.config.quic_v5 {
+            for (_, config) in quic_config.clone() {
+                let server_thread = thread::Builder::new().name(config.name.clone());
+                let server = Server::new(config, self.router_tx.clone(), V5);
+                server_thread.spawn(move || {
+                    let mut runtime = tokio::runtime::Builder::new_current_thread();
+                    let runtime = runtime.enable_all().build().unwrap();
+
+                    runtime.block_on(async {
+                        if let Err(e) = server.start_quic().await {
+                            error!(error=?e, "Server error - QUIC V5");
+                        }
+                    });
+                })?;
+            }
+        }
+
         if let Some(prometheus_setting) = &self.config.prometheus {
             let port = prometheus_setting.port;
             let timeout = prometheus_setting.interval;
@@ -390,6 +429,61 @@ impl<P: Protocol + Clone + Send + 'static> Server<P> {
                 ),
             };
 
+            time::sleep(delay).await;
+        }
+    }
+
+    async fn start_quic(&self) -> Result<(), Error> {
+        let crypto = match &self.config.tls {
+            Some(tls_config) => TLSAcceptor::server_config(tls_config)?,
+            _ => return Err(Error::NoTLS),
+        };
+        let listener = QuicListener::new(crypto, self.config.listen)?;
+        let delay = Duration::from_millis(self.config.next_connection_delay_ms);
+        let mut count: usize = 0;
+
+        let config = Arc::new(self.config.connections.clone());
+        info!(
+            config = self.config.name,
+            listen_addr = self.config.listen.to_string(),
+            "Listening for remote connections",
+        );
+
+        loop {
+            // Await new network connection.
+            let (network, addr, tenant_id) = match listener.accept().await {
+                Ok((n, a, t)) => (n, a, t),
+                Err(e) => {
+                    error!(error=?e, "Unable to accept socket.");
+                    continue;
+                }
+            };
+
+            info!(
+                name=?self.config.name, ?addr, count, tenant=?tenant_id, "accept"
+            );
+
+            let config = config.clone();
+            let router_tx = self.router_tx.clone();
+            count += 1;
+
+            let protocol = self.protocol.clone();
+
+            task::spawn(
+                remote(
+                    config,
+                    tenant_id.clone(),
+                    router_tx,
+                    Box::new(network),
+                    protocol,
+                )
+                .instrument(tracing::error_span!(
+                    "remote_link",
+                    ?tenant_id,
+                    client_id = field::Empty,
+                    connection_id = field::Empty,
+                )),
+            );
             time::sleep(delay).await;
         }
     }

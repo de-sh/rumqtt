@@ -57,11 +57,13 @@ pub enum Error {
     MissingTenantId,
     #[error("Tenant id missing in certificate")]
     CertificateParse,
+    #[error("Expected TLS support for use with Quinn")]
+    Quic,
 }
 
 #[cfg(feature = "use-rustls")]
 /// Extract uid from certificate's subject organization field
-fn extract_tenant_id(der: &[u8]) -> Result<Option<String>, Error> {
+pub fn extract_tenant_id(der: &[u8]) -> Result<Option<String>, Error> {
     let (_, cert) =
         x509_parser::parse_x509_certificate(der).map_err(|_| Error::CertificateParse)?;
     let tenant_id = match cert.subject().iter_organization().next() {
@@ -169,12 +171,33 @@ impl TLSAcceptor {
         Ok(TLSAcceptor::NativeTLS { acceptor })
     }
 
+    pub fn server_config(tls_config: &TlsConfig) -> Result<ServerConfig, Error> {
+        match tls_config {
+            TlsConfig::Rustls {
+                capath,
+                certpath,
+                keypath,
+            } => Self::rustls_server_config(capath, certpath, keypath),
+            _ => Err(Error::Quic),
+        }
+    }
+
     #[cfg(feature = "use-rustls")]
     fn rustls(
         ca_path: &String,
         cert_path: &String,
         key_path: &String,
     ) -> Result<TLSAcceptor, Error> {
+        let server_config = Self::rustls_server_config(ca_path, cert_path, key_path)?;
+        let acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(server_config));
+        Ok(TLSAcceptor::Rustls { acceptor })
+    }
+
+    pub fn rustls_server_config(
+        ca_path: &String,
+        cert_path: &String,
+        key_path: &String,
+    ) -> Result<ServerConfig, Error> {
         let (certs, key) = {
             // Get certificates
             let cert_file = File::open(cert_path);
@@ -201,29 +224,23 @@ impl TLSAcceptor {
             (certs, PrivateKey(key))
         };
 
-        // client authentication with a CA. CA isn't required otherwise
-        let server_config = {
-            let ca_file = File::open(ca_path);
-            let ca_file = ca_file.map_err(|_| Error::CaFileNotFound(ca_path.clone()))?;
-            let ca_file = &mut BufReader::new(ca_file);
-            let ca_certs = rustls_pemfile::certs(ca_file)?;
-            let ca_cert = ca_certs
-                .first()
-                .map(|c| Certificate(c.to_owned()))
-                .ok_or_else(|| Error::InvalidCACert(ca_path.to_string()))?;
+        let ca_file = File::open(ca_path);
+        let ca_file = ca_file.map_err(|_| Error::CaFileNotFound(ca_path.clone()))?;
+        let ca_file = &mut BufReader::new(ca_file);
+        let ca_certs = rustls_pemfile::certs(ca_file)?;
+        let ca_cert = ca_certs
+            .first()
+            .map(|c| Certificate(c.to_owned()))
+            .ok_or_else(|| Error::InvalidCACert(ca_path.to_string()))?;
 
-            let mut store = RootCertStore::empty();
-            store
-                .add(&ca_cert)
-                .map_err(|_| Error::InvalidCACert(ca_path.to_string()))?;
+        let mut store = RootCertStore::empty();
+        store
+            .add(&ca_cert)
+            .map_err(|_| Error::InvalidCACert(ca_path.to_string()))?;
 
-            ServerConfig::builder()
-                .with_safe_defaults()
-                .with_client_cert_verifier(AllowAnyAuthenticatedClient::new(store))
-                .with_single_cert(certs, key)?
-        };
-
-        let acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(server_config));
-        Ok(TLSAcceptor::Rustls { acceptor })
+        Ok(ServerConfig::builder()
+            .with_safe_defaults()
+            .with_client_cert_verifier(AllowAnyAuthenticatedClient::new(store))
+            .with_single_cert(certs, key)?)
     }
 }

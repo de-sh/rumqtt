@@ -45,6 +45,8 @@ pub struct Config {
     pub v4: HashMap<String, ServerSettings>,
     pub v5: Option<HashMap<String, ServerSettings>>,
     pub ws: Option<HashMap<String, ServerSettings>>,
+    pub quic_v4: Option<HashMap<String, ServerSettings>>,
+    pub quic_v5: Option<HashMap<String, ServerSettings>>,
     pub cluster: Option<ClusterSettings>,
     pub console: ConsoleSettings,
     pub bridge: Option<BridgeConfig>,

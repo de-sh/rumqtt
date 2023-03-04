@@ -3,6 +3,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 mod broker;
 #[cfg(any(feature = "use-rustls", feature = "use-native-tls"))]
 mod tls;
+mod quic;
 
 pub use broker::Broker;
 
