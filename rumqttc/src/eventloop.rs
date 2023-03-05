@@ -20,7 +20,7 @@ use tokio::time::{self, Instant, Sleep};
 use ws_stream_tungstenite::WsStream;
 
 use std::io;
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 #[cfg(unix)]
 use std::path::Path;
 use std::pin::Pin;
@@ -316,7 +316,7 @@ async fn network_connect(
             Network::new(tcp_stream, options.max_incoming_packet_size)
         }
         Transport::Quic(tls_config, client_port, server_name) => {
-            let local_addr = format!("0.0.0.0:{}", client_port).parse().unwrap();
+            let local_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), client_port);
             let server_addr = format!("{}:{}", options.broker_addr, options.port)
                 .parse()
                 .unwrap();

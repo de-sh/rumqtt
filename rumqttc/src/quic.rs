@@ -36,7 +36,7 @@ impl QuicConnection {
             .connection
             .connect_with(client_config, addr, server_name)?
             .await?;
-        let (tx, rx) = connection.accept_bi().await?;
+        let (tx, rx) = connection.open_bi().await?;
 
         Ok(QuicNetwork { tx, rx })
     }

@@ -5,7 +5,7 @@ use tokio::{task, time};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut options = MqttOptions::new("test-1", "0.0.0.0", 12345);
+    let mut options = MqttOptions::new("test-1", "127.0.0.1", 12345);
     let tls_config = TlsConfiguration::Simple {
         ca: include_bytes!("/home/devdutt/bytebeam/rumqtt/certs/ca.cert.pem").to_vec(),
         client_auth: Some((
@@ -14,7 +14,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )),
         alpn: None,
     };
-    options.set_transport(Transport::Quic(tls_config, 6789, "localhost".to_string()));
+    options.set_transport(Transport::Quic(tls_config, 54321, "localhost".to_string()));
 
     let (client, mut eventloop) = AsyncClient::new(options, 10);
 
@@ -45,7 +45,7 @@ async fn requests(client: AsyncClient) {
 
     for i in 1..=10 {
         client
-            .publish("hello/world", QoS::ExactlyOnce, false, vec![1; i])
+            .publish("hello/world", QoS::AtLeastOnce, false, vec![1; i])
             .await
             .unwrap();
 

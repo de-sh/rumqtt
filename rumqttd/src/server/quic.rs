@@ -2,9 +2,7 @@ use std::{io, net::SocketAddr, pin::Pin, sync::Arc, task::Poll};
 
 use quinn::{Endpoint, RecvStream, SendStream, ServerConfig};
 use tokio::io::{AsyncRead, AsyncWrite};
-use tokio_rustls::rustls::{Certificate, ServerConfig as Crypto};
-
-use super::tls::extract_tenant_id;
+use tokio_rustls::rustls::ServerConfig as Crypto;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -32,10 +30,10 @@ impl QuicListener {
         let connecting = self.listener.accept().await.ok_or(Error::NoIncoming)?;
         let addr = connecting.remote_address();
         let connection = connecting.await?;
-        let certificate: Certificate = *connection.peer_identity().unwrap().downcast().unwrap();
-        let tenant_id = extract_tenant_id(&certificate.0).unwrap();
+        // let certificate: Certificate = *connection.peer_identity().unwrap().downcast().unwrap();
+        // let tenant_id = extract_tenant_id(&certificate.0).unwrap();
         let (tx, rx) = connection.accept_bi().await?;
-        Ok((QuicNetwork { tx, rx }, addr, tenant_id))
+        Ok((QuicNetwork { tx, rx }, addr, None))
     }
 }
 
