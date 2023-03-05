@@ -15,6 +15,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         alpn: None,
     };
     options.set_transport(Transport::Quic(tls_config, 54321, "localhost".to_string()));
+    options.set_keep_alive(Duration::from_secs(5));
 
     let (client, mut eventloop) = AsyncClient::new(options, 10);
 
