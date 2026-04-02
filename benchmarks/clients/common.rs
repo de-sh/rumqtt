@@ -1,7 +1,7 @@
+use std::{fs::File, io::Write};
+
 use pprof::{protos::Message, ProfilerGuard};
 use serde::{Deserialize, Serialize};
-use std::fs::File;
-use std::io::Write;
 
 pub fn profile(name: &str, guard: ProfilerGuard) {
     if let Ok(report) = guard.report().build() {
@@ -11,7 +11,11 @@ pub fn profile(name: &str, guard: ProfilerGuard) {
         let mut content = Vec::new();
         profile.encode(&mut content).unwrap();
         file.write_all(&content).unwrap();
-    };
+
+        let svg_name = name.replace(".pb", ".svg");
+        let svg_file = File::create(&svg_name).unwrap();
+        report.flamegraph(svg_file).unwrap();
+    }
 }
 
 #[derive(Serialize, Deserialize)]

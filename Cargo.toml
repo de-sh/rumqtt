@@ -22,3 +22,9 @@ debug = false
 codegen-units = 1
 lto = true
 strip = true
+
+# Usage: cargo build --profile profiling -p benchmarks --bin <name>
+[profile.profiling]
+inherits = "release" # keeping actual optimizations
+debug = 1
+strip = false # retain debug symbols for readable flamegraphs

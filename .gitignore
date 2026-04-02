@@ -8,6 +8,7 @@ perf.data*
 cachegrind.out
 # Plot
 /plot
+bench.svg
 **/.uuid
 # Logs
 **/logs/
